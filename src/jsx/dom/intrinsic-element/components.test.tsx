@@ -2,6 +2,7 @@
 import { JSDOM, ResourceLoader } from 'jsdom'
 import { Suspense, render } from '..'
 import { useState } from '../../hooks'
+import { useFormStatus } from '../hooks'
 import { clearCache, composeRef } from './components'
 
 describe('intrinsic element', () => {
@@ -1133,6 +1134,47 @@ describe('intrinsic element', () => {
       expect(root.innerHTML).toBe(
         '<form method="post" action="/entries"><button type="submit">Submit</button></form>'
       )
+    })
+
+    it('resets the pending state when an async action rejects', async () => {
+      let rejectAction!: (error: unknown) => void
+      const action = vi.fn(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            rejectAction = reject
+          })
+      )
+      const Submit = () => {
+        const { pending } = useFormStatus()
+        return <button type='submit'>{pending ? 'Sending...' : 'Submit'}</button>
+      }
+      const App = () => {
+        return (
+          <form action={action} method='post'>
+            <input type='text' name='name' value='Hello' />
+            <Submit />
+          </form>
+        )
+      }
+      const errorListener = vi.fn((ev: ErrorEvent) => ev.preventDefault())
+      document.defaultView!.addEventListener('error', errorListener)
+      try {
+        render(<App />, root)
+        const button = root.querySelector('button')!
+        button.click()
+        await Promise.resolve()
+        expect(action).toBeCalledTimes(1)
+        expect(button.textContent).toBe('Sending...')
+
+        rejectAction(new Error('action failed'))
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+        expect(button.textContent).toBe('Submit')
+        expect(errorListener).toHaveBeenCalledTimes(1)
+      } finally {
+        document.defaultView!.removeEventListener('error', errorListener)
+      }
     })
 
     it('toggle show / hide form', async () => {
