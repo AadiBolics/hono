@@ -31,7 +31,12 @@ export const FormContext: Context<FormStatus> = createContext<FormStatus>({
 const actions: Set<Promise<unknown>> = new Set()
 export const registerAction = (action: Promise<unknown>) => {
   actions.add(action)
-  action.finally(() => actions.delete(action))
+  action.then(
+    () => actions.delete(action),
+    // A rejecting action must not surface as an unhandled rejection here;
+    // the caller of the action observes the rejection itself.
+    () => actions.delete(action)
+  )
 }
 
 /**
