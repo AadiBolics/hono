@@ -345,7 +345,21 @@ export const form: FC<
       const actionRes = currentAction(formData)
       if (actionRes instanceof Promise) {
         registerAction(actionRes)
-        await actionRes
+        try {
+          await actionRes
+        } catch (error) {
+          // A rejected action must not leave the form stuck in its pending
+          // state. Surface the error the same way a synchronous throw from a
+          // submit handler is surfaced, then reset the form below.
+          const view = (ev.target as HTMLFormElement).ownerDocument?.defaultView
+          view?.dispatchEvent(
+            new view.ErrorEvent('error', {
+              error,
+              message: error instanceof Error ? error.message : String(error),
+              cancelable: true,
+            })
+          )
+        }
       }
       setState([null, true])
     },
